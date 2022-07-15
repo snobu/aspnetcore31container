@@ -1,0 +1,61 @@
+name: Build and Deploy ASP.NET Core 3.1
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 3.1.x
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet build --no-restore
+    - name: Test
+      run: dotnet test --no-build --verbosity normal
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Log in to container registry
+      uses: docker/login-action@v1
+      with:
+        registry: shipyard.azurecr.io
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+    
+    - name: Build and push container image to registry
+      uses: docker/build-push-action@v2
+      with:
+        push: true
+        tags: shipyard.azurecr.io/aspnetcore31container:${{ github.sha }}
+        file: ./Dockerfile
+        context: .
+
+
+  deploy:
+      runs-on: ubuntu-latest
+      needs: build
+
+      steps:
+        - name: Azure Login
+          uses: azure/login@v1
+          with:
+            creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+
+        - name: Deploy to containerapp
+          uses: azure/CLI@v1
+          with:
+            inlineScript: |
+              az config set extension.use_dynamic_install=yes_without_prompt
+              az containerapp registry set -n aspnetcore31container -g aspnetcore31container --server shipyard.azurecr.io --username  ${{ secrets.ACR_USERNAME }} --password ${{ secrets.ACR_PASSWORD }}
+              az containerapp update -n aspnetcore31container -g aspnetcore31container --image shipyard.azurecr.io/aspnetcore31container:${{ github.sha }}
