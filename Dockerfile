@@ -1,5 +1,6 @@
 
 FROM mcr.microsoft.com/dotnet/aspnet:3.1
 WORKDIR /app
-COPY bin/Release/netcoreapp3.1/publish/ ./
+RUN ls -la && cd .. && ls -laR
+COPY . ./
 ENTRYPOINT ["dotnet", "aspnetcore31container.dll"]
